@@ -176,9 +176,9 @@
   let cameraActive = false;
   let handsInstance = null;
   let cooldown = false;
-  let gameComplete = false;            // ← novo
-  let letterQueue = [];                // ← fila de letras a jogar
-  let completedLetters = new Set();    // ← letras já concluídas
+  let gameComplete = false;
+  let letterQueue = [];
+  let completedLetters = new Set();
 
   /* ── Históricos ── */
   const HISTORY_LEN = 30;
@@ -283,7 +283,6 @@
 
   /* ════════════════════════════════════════════
      CLASSIFICADOR ESTÁTICO
-     (R agora com d_im2 < 0.17 para não capturar U)
   ════════════════════════════════════════════ */
   function classifyStatic(lm) {
     if (!lm || lm.length < 21) return '?';
@@ -397,13 +396,13 @@
         f.rinCurl > -1  && f.rinCurl < 83  &&
         f.pinCurl > 17  && f.pinCurl < 120 &&
         f.tmbAngle > 111 && f.tmbAngle < 169 &&
-        f.d_im2 > -0.01 && f.d_im2 < 0.17 &&   // ← filtro decisivo contra o U
+        f.d_im2 > -0.01 && f.d_im2 < 0.17 &&
         f.handDown && f.thumbExt &&
         f.idxExt && f.midExt && !f.rinExt && !f.pinExt &&
         !f.thumbOver && !f.thumbOut)
       return 'R';
 
-    // ── U (mantido inalterado) ──
+    // ── U ──
     if (f.idxCurl > 171 && f.idxCurl < 180 &&
         f.midCurl > 174 && f.midCurl < 181 &&
         f.rinCurl > 15  && f.rinCurl < 55  &&
@@ -621,7 +620,6 @@
     const staticResult = classifyStatic(lm);
     const target = targetLetter;
 
-    // Históricos
     if (target === 'J') {
       pushHistory(lm[20]);
       twistHistory = [];
@@ -675,7 +673,7 @@
     }
   }
 
-  /* ── Lógica do jogo (sequencial) ── */
+  /* ── Lógica do jogo ── */
   function updateScoreDisplay() {
     scoreDisplay.textContent = score + ' / ' + LETTERS.length;
   }
@@ -683,7 +681,6 @@
   function pickNewLetter() {
     if (gameComplete) return;
     if (letterQueue.length === 0) {
-      // Todas as letras concluídas
       gameComplete = true;
       messageDiv.textContent = '🎉 Parabéns! Você completou todas as letras!';
       speak('Parabéns! Você completou todas as letras!');
@@ -692,11 +689,10 @@
       videoWrapper.classList.remove('correct','wrong','motion');
       progressBar.style.width = '100%';
       detectedLetterDiv.textContent = '--';
-      resetBtn.style.display = 'inline-block'; // mostra o botão de reiniciar
+      resetBtn.style.display = 'inline-block';
       return;
     }
 
-    // Próxima letra da fila
     targetLetter = letterQueue.pop();
     targetLetterDiv.textContent = targetLetter;
     targetLetterDiv.classList.remove('bounce');
@@ -717,7 +713,6 @@
   }
 
   function resetGame() {
-    // Reinicializa o jogo (chamado pelo botão "Reiniciar")
     gameComplete = false;
     letterQueue = [...LETTERS].sort(() => Math.random() - 0.5);
     completedLetters.clear();
@@ -729,17 +724,13 @@
     detectedLetterDiv.textContent = '?';
     cooldown = false;
     clearHistory();
-
-    // Remove classes 'completed' de todos os pills
     document.querySelectorAll('.letter-pill').forEach(p => p.classList.remove('completed'));
-
-    resetBtn.style.display = 'none';  // esconde o botão novamente
+    resetBtn.style.display = 'none';
     messageDiv.textContent = cameraActive ? 'Faça o sinal da letra destacada!' : 'Clique em "Iniciar Câmera" e faça a letra!';
     pickNewLetter();
     speak('Jogo reiniciado!');
   }
 
-  /* ── Processamento dos resultados da mão ── */
   function onResults(results) {
     if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
       drawHand(null);
@@ -751,7 +742,7 @@
     }
     if (gameComplete) {
       drawHand(results.multiHandLandmarks[0]);
-      return; // jogo finalizado, não processa mais
+      return;
     }
 
     const lm = results.multiHandLandmarks[0];
@@ -762,14 +753,23 @@
     let displayDetected = detected;
     let isMatch = false;
 
-    // Tratamento F/T: aceita ambos, força exibição da letra alvo
+    // Aceita troca F/T
     if (targetLetter === 'F' && (detected === 'F' || detected === 'T')) {
       isMatch = true;
       displayDetected = 'F';
     } else if (targetLetter === 'T' && (detected === 'T' || detected === 'F')) {
       isMatch = true;
       displayDetected = 'T';
-    } else if (detected === targetLetter) {
+    }
+    // 🔁 NOVO: Aceita U quando detecta R, e vice-versa
+    else if (targetLetter === 'U' && (detected === 'U' || detected === 'R')) {
+      isMatch = true;
+      displayDetected = 'U';
+    } else if (targetLetter === 'R' && (detected === 'R' || detected === 'U')) {
+      isMatch = true;
+      displayDetected = 'R';
+    }
+    else if (detected === targetLetter) {
       isMatch = true;
       displayDetected = detected;
     }
@@ -779,7 +779,6 @@
     if (isMatch) {
       videoWrapper.classList.add('correct'); videoWrapper.classList.remove('wrong','motion');
 
-      // Preenchimento instantâneo para letras de movimento (K incluso)
       if (targetLetter === 'Z' || targetLetter === 'J' || targetLetter === 'X' || targetLetter === 'H' || targetLetter === 'K') {
         correctFrameCount = REQUIRED_FRAMES;
       } else {
@@ -801,7 +800,7 @@
 
         setTimeout(() => {
           cooldown = false;
-          pickNewLetter(); // isso pode acionar o game over
+          pickNewLetter();
         }, 1400);
       }
     } else {
@@ -834,9 +833,7 @@
       await camera.start();
       cameraActive = true;
       startBtn.textContent = '⏹ Parar Câmera';
-      if (!gameComplete) {
-        messageDiv.textContent = 'Faça o sinal da letra destacada!';
-      }
+      if (!gameComplete) messageDiv.textContent = 'Faça o sinal da letra destacada!';
       speak('Faça a letra ' + targetLetter);
     } catch (err) {
       console.error(err);
@@ -867,12 +864,10 @@
   });
 
   resetBtn.addEventListener('click', resetGame);
-
   video.addEventListener('loadedmetadata', () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
   });
-
   window.addEventListener('beforeunload', stopCamera);
 
   /* ── Inicialização ── */
@@ -881,7 +876,7 @@
   updateScoreDisplay();
   completedLetters.clear();
   gameComplete = false;
-  resetBtn.style.display = 'none';  // botão escondido até o fim do jogo
+  resetBtn.style.display = 'none';
   pickNewLetter();
 })();
 </script>
