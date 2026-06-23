@@ -99,7 +99,7 @@
       <div class="message" id="message">Clique em "Iniciar Câmera" e faça a letra!</div>
       <div class="btn-row">
         <button class="btn" id="startBtn">📷 Iniciar Câmera</button>
-        <button class="btn btn-reset" id="resetBtn" style="display: none;">🔄 Reiniciar</button>
+        <button class="btn btn-reset" id="resetBtn">🔄 Reiniciar</button>
       </div>
       <div class="letters-row" id="lettersRow"></div>
     </div>
@@ -689,7 +689,6 @@
       videoWrapper.classList.remove('correct','wrong','motion');
       progressBar.style.width = '100%';
       detectedLetterDiv.textContent = '--';
-      resetBtn.style.display = 'inline-block';
       return;
     }
 
@@ -725,7 +724,6 @@
     cooldown = false;
     clearHistory();
     document.querySelectorAll('.letter-pill').forEach(p => p.classList.remove('completed'));
-    resetBtn.style.display = 'none';
     messageDiv.textContent = cameraActive ? 'Faça o sinal da letra destacada!' : 'Clique em "Iniciar Câmera" e faça a letra!';
     pickNewLetter();
     speak('Jogo reiniciado!');
@@ -876,7 +874,6 @@
   updateScoreDisplay();
   completedLetters.clear();
   gameComplete = false;
-  resetBtn.style.display = 'none';
   pickNewLetter();
 })();
 </script>
