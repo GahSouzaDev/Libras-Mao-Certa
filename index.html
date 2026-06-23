@@ -169,10 +169,11 @@
   let handsInstance = null;
   let cooldown = false;
 
-  /* ── Histórico de movimento ── */
+  /* ── Históricos ── */
   const HISTORY_LEN = 30;
   let tipHistory = [];
   let twistHistory = [];
+  let idxCurlHistory = [];
 
   /* ── Voz ── */
   function speak(text) {
@@ -271,14 +272,12 @@
 
   /* ════════════════════════════════════════════
      CLASSIFICADOR ESTÁTICO v2
-     Ranges combinados: dados originais UNION dados da professora
-     Ordenado por especificidade (mais restritivo primeiro)
   ════════════════════════════════════════════ */
   function classifyStatic(lm) {
     if (!lm || lm.length < 21) return '?';
     const f = extractFeatures(lm);
 
-    // ── S (polegar cruzado sobre dedos) ──
+    // ── S ──
     if (f.d_ti > 0.33 && f.d_ti < 0.64 &&
         f.d_tm > 0.29 && f.d_tm < 0.60 &&
         f.idxCurl > 3 && f.idxCurl < 62 &&
@@ -290,7 +289,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'S';
 
-    // ── E (todos dobrados, tmbAngle mais baixo) ──
+    // ── E ──
     if (f.d_ti > -0.00 && f.d_ti < 0.56 &&
         f.d_tm > -0.06 && f.d_tm < 0.41 &&
         f.idxCurl > -4 && f.idxCurl < 53 &&
@@ -302,7 +301,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'E';
 
-    // ── A (punho, polegar para fora — tmbAngle alto) ──
+    // ── A ──
     if (f.idxCurl > 1   && f.idxCurl < 76  &&
         f.midCurl > -2  && f.midCurl < 84  &&
         f.rinCurl > -10 && f.rinCurl < 76  &&
@@ -313,7 +312,7 @@
         !f.thumbOver && f.thumbOut)
       return 'A';
 
-    // ── O (todos curvados, polegar estendido, sem thumbOut) ──
+    // ── O ──
     if (f.idxCurl > 22  && f.idxCurl < 186 &&
         f.midCurl > 15  && f.midCurl < 172 &&
         f.rinCurl > 0   && f.rinCurl < 159 &&
@@ -324,7 +323,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'O';
 
-    // ── F (indicador dobrado, 3 estendidos, thumbOut) ──
+    // ── F ──
     if (f.idxCurl > 54  && f.idxCurl < 154 &&
         f.midCurl > 150 && f.midCurl < 204 &&
         f.rinCurl > 149 && f.rinCurl < 205 &&
@@ -335,7 +334,7 @@
         !f.thumbOver && f.thumbOut)
       return 'F';
 
-    // ── T (polegar entre indicador/médio; médio+anelar+min estendidos; thumbOut) ──
+    // ── T ──
     if (f.idxCurl > 30  && f.idxCurl < 183 &&
         f.midCurl > 150 && f.midCurl < 204 &&
         f.rinCurl > 151 && f.rinCurl < 204 &&
@@ -346,7 +345,7 @@
         !f.thumbOver && f.thumbOut)
       return 'T';
 
-    // ── B (4 dedos estendidos, sem thumbOut) ──
+    // ── B ──
     if (f.idxCurl > 143 && f.idxCurl < 196 &&
         f.midCurl > 146 && f.midCurl < 198 &&
         f.rinCurl > 148 && f.rinCurl < 201 &&
@@ -357,7 +356,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'B';
 
-    // ── W (idx+mid+rin estendidos, pin fechado, sem thumbOut) ──
+    // ── W ──
     if (f.idxCurl > 146 && f.idxCurl < 202 &&
         f.midCurl > 147 && f.midCurl < 201 &&
         f.rinCurl > 149 && f.rinCurl < 203 &&
@@ -368,8 +367,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'W';
 
-    // ── V (idx+mid estendidos, afastados, sem thumbOut) ──
-    // d_im2 alto distingue do R e U
+    // ── V ──
     if (f.idxCurl > 148 && f.idxCurl < 202 &&
         f.midCurl > 148 && f.midCurl < 202 &&
         f.rinCurl > 8   && f.rinCurl < 73  &&
@@ -381,7 +379,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'V';
 
-    // ── R (idx+mid cruzados, muito próximos) ──
+    // ── R ──
     if (f.idxCurl > 143 && f.idxCurl < 199 &&
         f.midCurl > 144 && f.midCurl < 204 &&
         f.rinCurl > -1  && f.rinCurl < 83  &&
@@ -393,7 +391,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'R';
 
-    // ── U (idx+mid juntos, d_im2 pequeno) ──
+    // ── U ──
     if (f.idxCurl > 147 && f.idxCurl < 199 &&
         f.midCurl > 150 && f.midCurl < 202 &&
         f.rinCurl > -9  && f.rinCurl < 52  &&
@@ -405,7 +403,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'U';
 
-    // ── K (idx+mid estendidos + polegar no meio, rinCurl alto) ──
+    // ── K ──
     if (f.idxCurl > 141 && f.idxCurl < 201 &&
         f.midCurl > 62  && f.midCurl < 203 &&
         f.rinCurl > 9   && f.rinCurl < 146 &&
@@ -415,7 +413,7 @@
         f.idxExt && !f.rinExt && !f.pinExt && !f.thumbOver)
       return 'K';
 
-    // ── H (idx+mid horizontal, polegar estendido) ──
+    // ── H ──
     if (f.idxCurl > 146 && f.idxCurl < 203 &&
         f.midCurl > 143 && f.midCurl < 202 &&
         f.rinCurl > -5  && f.rinCurl < 96  &&
@@ -426,7 +424,7 @@
         !f.thumbOver)
       return 'H';
 
-    // ── Y (polegar+mínimo, thumbOut) ──
+    // ── Y ──
     if (f.idxCurl > 13  && f.idxCurl < 181 &&
         f.midCurl > 26  && f.midCurl < 179 &&
         f.rinCurl > 14  && f.rinCurl < 155 &&
@@ -437,7 +435,7 @@
         !f.thumbOver && f.thumbOut)
       return 'Y';
 
-    // ── I (só mínimo, sem thumbOut) ──
+    // ── I ──
     if (f.idxCurl > -9  && f.idxCurl < 59  &&
         f.midCurl > -8  && f.midCurl < 64  &&
         f.rinCurl > -13 && f.rinCurl < 68  &&
@@ -448,7 +446,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'I';
 
-    // ── L (indicador para cima, thumbOut, midCurl médio) ──
+    // ── L ──
     if (f.idxCurl > 141 && f.idxCurl < 202 &&
         f.midCurl > 2   && f.midCurl < 86  &&
         f.rinCurl > -3  && f.rinCurl < 108 &&
@@ -459,18 +457,21 @@
         !f.thumbOver && f.thumbOut)
       return 'L';
 
-    // ── G (indicador+polegar horizontal, midCurl baixo, thumbOut) ──
-    if (f.idxCurl > 143 && f.idxCurl < 199 &&
-        f.midCurl > -3  && f.midCurl < 67  &&
-        f.rinCurl > -16 && f.rinCurl < 59  &&
-        f.pinCurl > -19 && f.pinCurl < 60  &&
-        f.tmbAngle > 120 && f.tmbAngle < 186 &&
+    // ── G (com dados de treino) ──
+    if (f.idxCurl > 164 && f.idxCurl < 175 &&
+        f.midCurl > 15  && f.midCurl < 115 &&
+        f.rinCurl > 10  && f.rinCurl < 115 &&
+        f.pinCurl > 5   && f.pinCurl < 135 &&
+        f.tmbAngle > 138 && f.tmbAngle < 170 &&
+        f.d_ti > 0.75 &&
+        f.d_im2 > 1.2 &&
+        f.palmRoll < -60 &&
         f.handDown && f.thumbExt &&
         f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
-        !f.thumbOver && f.thumbOut)
+        !f.thumbOver)
       return 'G';
 
-    // ── D (indicador para cima, polegar toca médio, sem thumbOut) ──
+    // ── D ──
     if (f.idxCurl > 148 && f.idxCurl < 202 &&
         f.midCurl > 17  && f.midCurl < 123 &&
         f.rinCurl > 6   && f.rinCurl < 126 &&
@@ -481,7 +482,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'D';
 
-    // ── M (mão virada, todos fechados, thumbExt=false) ──
+    // ── M ──
     if (f.idxCurl > 147 && f.idxCurl < 200 &&
         f.midCurl > 146 && f.midCurl < 202 &&
         f.rinCurl > 146 && f.rinCurl < 205 &&
@@ -492,7 +493,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'M';
 
-    // ── N (mão virada, idx+mid fechados, rin+pin tendem a estar estendidos) ──
+    // ── N ──
     if (f.idxCurl > 146 && f.idxCurl < 203 &&
         f.midCurl > 145 && f.midCurl < 200 &&
         f.tmbAngle > 118 && f.tmbAngle < 179 &&
@@ -501,7 +502,7 @@
         !f.thumbOver && !f.thumbOut)
       return 'N';
 
-    // ── C (curvado em C, thumbOut) ──
+    // ── C ──
     if (f.idxCurl > 86  && f.idxCurl < 170 &&
         f.midCurl > 67  && f.midCurl < 158 &&
         f.rinCurl > 64  && f.rinCurl < 157 &&
@@ -510,7 +511,7 @@
         f.handDown && !f.thumbOver && f.thumbOut)
       return 'C';
 
-    // ── P (mão para baixo/frente, idx estendido, rin+pin fechados, thumbOut) ──
+    // ── P ──
     if (f.idxCurl > 143 && f.idxCurl < 201 &&
         f.midCurl > 146 && f.midCurl < 201 &&
         f.rinCurl > 11  && f.rinCurl < 118 &&
@@ -521,7 +522,7 @@
         !f.thumbOver && f.thumbOut)
       return 'P';
 
-    // ── Q (mão para baixo, idx fechado, mid+rin+pin estendidos, thumbOut) ──
+    // ── Q ──
     if (f.idxCurl > 149 && f.idxCurl < 204 &&
         f.tmbAngle > 113 && f.tmbAngle < 201 &&
         !f.thumbExt && !f.idxExt &&
@@ -542,7 +543,15 @@
     twistHistory.push(angle);
     if (twistHistory.length > HISTORY_LEN) twistHistory.shift();
   }
-  function clearHistory() { tipHistory = []; twistHistory = []; }
+  function pushIdxCurl(curl) {
+    idxCurlHistory.push(curl);
+    if (idxCurlHistory.length > 18) idxCurlHistory.shift();
+  }
+  function clearHistory() {
+    tipHistory = [];
+    twistHistory = [];
+    idxCurlHistory = [];
+  }
 
   function detectJ() {
     if (tipHistory.length < 15) return false;
@@ -554,15 +563,27 @@
   }
 
   function detectX() {
-    if (tipHistory.length < 12) return false;
-    const pts = tipHistory.slice(-18);
-    let minY = pts[0].y, maxY = pts[0].y, minIdx = 0;
-    for (let i = 1; i < pts.length; i++) {
-      if (pts[i].y > maxY) { maxY = pts[i].y; minIdx = i; }
-      if (pts[i].y < minY) minY = pts[i].y;
+    // Precisa de pelo menos 10 frames de histórico de curvatura
+    if (idxCurlHistory.length < 10) return false;
+
+    // Verifica se houve gancho (idxCurl < 130) após dedo reto (>150)
+    let hasHook = false;
+    let hadStraightBefore = false;
+    for (let i = 0; i < idxCurlHistory.length; i++) {
+      if (idxCurlHistory[i] < 130) hasHook = true;
+      if (i < idxCurlHistory.length - 3 && idxCurlHistory[i] > 150) hadStraightBefore = true;
     }
-    const range = maxY - minY;
-    return range > 0.06 && minIdx > 3 && minIdx < pts.length - 2;
+    if (!hasHook || !hadStraightBefore) return false;
+
+    // Movimento vertical da ponta do indicador como confirmação
+    if (tipHistory.length < 10) return false;
+    const pts = tipHistory.slice(-15);
+    let minY = pts[0].y, maxY = pts[0].y;
+    for (const p of pts) {
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return (maxY - minY) > 0.03;
   }
 
   function detectZ() {
@@ -593,15 +614,31 @@
     const staticResult = classifyStatic(lm);
     const target = targetLetter;
 
-    if (target === 'J') { pushHistory(lm[20]); twistHistory=[]; }
-    else if (target === 'X' || target === 'Z') { pushHistory(lm[8]); twistHistory=[]; }
-    else if (target === 'H') { pushTwist(palmRoll(lm)); tipHistory=[]; }
-    else { clearHistory(); }
+    // Históricos
+    if (target === 'J') {
+      pushHistory(lm[20]);
+      twistHistory = [];
+      idxCurlHistory = [];
+    } else if (target === 'X' || target === 'Z') {
+      pushHistory(lm[8]);
+      twistHistory = [];
+      if (target === 'X') {
+        pushIdxCurl(angle3(lm[5], lm[6], lm[8]));
+      } else {
+        idxCurlHistory = [];
+      }
+    } else if (target === 'H') {
+      pushTwist(palmRoll(lm));
+      tipHistory = [];
+      idxCurlHistory = [];
+    } else {
+      clearHistory();
+    }
 
     if (target === 'J' && (staticResult === 'I' || staticResult === 'J') && detectJ()) return 'J';
     if (target === 'X' && detectX()) return 'X';
     if (target === 'Z' && (staticResult === 'D' || staticResult === 'Z') && detectZ()) return 'Z';
-    if (target === 'H' && staticResult === 'H' && detectHTwist()) return 'H';
+    if (target === 'H' && (staticResult === 'H' || staticResult === 'K') && detectHTwist()) return 'H';
 
     return staticResult;
   }
@@ -676,12 +713,34 @@
     if (cooldown) return;
 
     const detected = classifyHand(lm);
-    detectedLetterDiv.textContent = detected;
+    let displayDetected = detected;
+    let isMatch = false;
 
-    if (detected === targetLetter) {
+    // Tratamento F/T: aceita ambos, força exibição da letra alvo
+    if (targetLetter === 'F' && (detected === 'F' || detected === 'T')) {
+      isMatch = true;
+      displayDetected = 'F';
+    } else if (targetLetter === 'T' && (detected === 'T' || detected === 'F')) {
+      isMatch = true;
+      displayDetected = 'T';
+    } else if (detected === targetLetter) {
+      isMatch = true;
+      displayDetected = detected;
+    }
+
+    detectedLetterDiv.textContent = displayDetected;
+
+    if (isMatch) {
       videoWrapper.classList.add('correct'); videoWrapper.classList.remove('wrong','motion');
-      correctFrameCount++;
+
+      // Z, J e X preenchem a barra instantaneamente
+      if (targetLetter === 'Z' || targetLetter === 'J' || targetLetter === 'X') {
+        correctFrameCount = REQUIRED_FRAMES;
+      } else {
+        correctFrameCount++;
+      }
       progressBar.style.width = Math.min(100,(correctFrameCount/REQUIRED_FRAMES)*100)+'%';
+
       if (correctFrameCount >= REQUIRED_FRAMES) {
         cooldown=true; score++; scoreDisplay.textContent=score;
         messageDiv.textContent=`✅ Muito bem! Letra "${targetLetter}" correta!`;
@@ -692,7 +751,7 @@
     } else {
       videoWrapper.classList.remove('correct');
       const isMotion = LETTER_DATA[targetLetter]?.motion;
-      if (detected !== '?') { videoWrapper.classList.add('wrong'); videoWrapper.classList.remove('motion'); }
+      if (displayDetected !== '?') { videoWrapper.classList.add('wrong'); videoWrapper.classList.remove('motion'); }
       else { videoWrapper.classList.remove('wrong'); if (isMotion) videoWrapper.classList.add('motion'); }
       if (correctFrameCount>0) correctFrameCount=Math.max(0,correctFrameCount-2);
       progressBar.style.width=Math.max(0,(correctFrameCount/REQUIRED_FRAMES)*100)+'%';
