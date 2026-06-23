@@ -62,8 +62,16 @@
     .btn-reset { background:linear-gradient(135deg,#e74c3c,#c0392b); box-shadow:0 8px 25px rgba(231,76,60,.4); }
     .btn-reset:hover { box-shadow:0 12px 35px rgba(231,76,60,.7); }
     .letters-row { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:320px; }
-    .letter-pill { font-size:.72rem; font-weight:700; padding:3px 9px; border-radius:50px; background:rgba(255,255,255,.1); color:rgba(255,255,255,.65); letter-spacing:.5px; cursor:default; }
+    .letter-pill {
+      font-size:.72rem; font-weight:700; padding:3px 9px; border-radius:50px;
+      background:rgba(255,255,255,.1); color:rgba(255,255,255,.65); letter-spacing:.5px; cursor:default;
+      transition: background 0.2s, color 0.2s;
+    }
     .letter-pill.has-motion { color:#aac4ff; }
+    .letter-pill.completed {
+      background: rgba(0,255,100,0.3); color: #fff;
+      text-decoration: line-through;
+    }
     @media (max-width:767px) {
       .title { font-size:1.65rem; }
       .target-letter { font-size:4rem; width:80px; height:80px; line-height:80px; }
@@ -86,12 +94,12 @@
         <div class="detected-letter" id="detectedLetter">?</div>
       </div>
       <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>
-      <div class="score">🏆 <span id="scoreDisplay">0</span> pontos</div>
+      <div class="score">🏆 <span id="scoreDisplay">0 / 26</span></div>
       <div class="hint-box" id="hintBox">—</div>
       <div class="message" id="message">Clique em "Iniciar Câmera" e faça a letra!</div>
       <div class="btn-row">
         <button class="btn" id="startBtn">📷 Iniciar Câmera</button>
-        <button class="btn btn-reset" id="resetBtn">🔄 Reiniciar</button>
+        <button class="btn btn-reset" id="resetBtn" style="display: none;">🔄 Reiniciar</button>
       </div>
       <div class="letters-row" id="lettersRow"></div>
     </div>
@@ -160,7 +168,7 @@
     lettersRow.appendChild(pill);
   });
 
-  /* ── Estado ── */
+  /* ── Estado do jogo ── */
   let targetLetter = 'A';
   let correctFrameCount = 0;
   const REQUIRED_FRAMES = 20;
@@ -168,6 +176,9 @@
   let cameraActive = false;
   let handsInstance = null;
   let cooldown = false;
+  let gameComplete = false;            // ← novo
+  let letterQueue = [];                // ← fila de letras a jogar
+  let completedLetters = new Set();    // ← letras já concluídas
 
   /* ── Históricos ── */
   const HISTORY_LEN = 30;
@@ -664,17 +675,36 @@
     }
   }
 
-  /* ── Jogo ── */
+  /* ── Lógica do jogo (sequencial) ── */
+  function updateScoreDisplay() {
+    scoreDisplay.textContent = score + ' / ' + LETTERS.length;
+  }
+
   function pickNewLetter() {
-    let nl;
-    do { nl = LETTERS[Math.floor(Math.random()*LETTERS.length)]; }
-    while (nl === targetLetter && LETTERS.length > 1);
-    targetLetter = nl;
+    if (gameComplete) return;
+    if (letterQueue.length === 0) {
+      // Todas as letras concluídas
+      gameComplete = true;
+      messageDiv.textContent = '🎉 Parabéns! Você completou todas as letras!';
+      speak('Parabéns! Você completou todas as letras!');
+      targetLetterDiv.textContent = '✔';
+      hintBox.textContent = 'Jogo concluído!';
+      videoWrapper.classList.remove('correct','wrong','motion');
+      progressBar.style.width = '100%';
+      detectedLetterDiv.textContent = '--';
+      resetBtn.style.display = 'inline-block'; // mostra o botão de reiniciar
+      return;
+    }
+
+    // Próxima letra da fila
+    targetLetter = letterQueue.pop();
     targetLetterDiv.textContent = targetLetter;
     targetLetterDiv.classList.remove('bounce');
     void targetLetterDiv.offsetWidth;
     targetLetterDiv.classList.add('bounce');
-    correctFrameCount = 0; progressBar.style.width = '0%'; clearHistory();
+    correctFrameCount = 0;
+    progressBar.style.width = '0%';
+    clearHistory();
     const data = LETTER_DATA[targetLetter];
     hintBox.textContent = data.hint;
     hintBox.className = 'hint-box' + (data.motion ? ' motion-hint' : '');
@@ -687,23 +717,43 @@
   }
 
   function resetGame() {
-    score=0; scoreDisplay.textContent='0';
-    correctFrameCount=0; progressBar.style.width='0%';
+    // Reinicializa o jogo (chamado pelo botão "Reiniciar")
+    gameComplete = false;
+    letterQueue = [...LETTERS].sort(() => Math.random() - 0.5);
+    completedLetters.clear();
+    score = 0;
+    updateScoreDisplay();
+    correctFrameCount = 0;
+    progressBar.style.width = '0%';
     videoWrapper.classList.remove('correct','wrong','motion');
-    detectedLetterDiv.textContent='?'; cooldown=false;
-    clearHistory(); pickNewLetter();
+    detectedLetterDiv.textContent = '?';
+    cooldown = false;
+    clearHistory();
+
+    // Remove classes 'completed' de todos os pills
+    document.querySelectorAll('.letter-pill').forEach(p => p.classList.remove('completed'));
+
+    resetBtn.style.display = 'none';  // esconde o botão novamente
     messageDiv.textContent = cameraActive ? 'Faça o sinal da letra destacada!' : 'Clique em "Iniciar Câmera" e faça a letra!';
+    pickNewLetter();
+    speak('Jogo reiniciado!');
   }
 
+  /* ── Processamento dos resultados da mão ── */
   function onResults(results) {
     if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
       drawHand(null);
       detectedLetterDiv.textContent='?';
       videoWrapper.classList.remove('correct','wrong');
-      if (LETTER_DATA[targetLetter]?.motion) videoWrapper.classList.add('motion');
+      if (!gameComplete && LETTER_DATA[targetLetter]?.motion) videoWrapper.classList.add('motion');
       correctFrameCount=0; progressBar.style.width='0%';
       return;
     }
+    if (gameComplete) {
+      drawHand(results.multiHandLandmarks[0]);
+      return; // jogo finalizado, não processa mais
+    }
+
     const lm = results.multiHandLandmarks[0];
     drawHand(lm);
     if (cooldown) return;
@@ -738,57 +788,100 @@
       progressBar.style.width = Math.min(100,(correctFrameCount/REQUIRED_FRAMES)*100)+'%';
 
       if (correctFrameCount >= REQUIRED_FRAMES) {
-        cooldown=true; score++; scoreDisplay.textContent=score;
-        messageDiv.textContent=`✅ Muito bem! Letra "${targetLetter}" correta!`;
-        speak('Muito bem!'); triggerConfetti();
+        cooldown = true;
+        score++;
+        updateScoreDisplay();
+        completedLetters.add(targetLetter);
+        document.getElementById('pill-'+targetLetter)?.classList.add('completed');
+
+        messageDiv.textContent = `✅ Muito bem! Letra "${targetLetter}" correta!`;
+        speak('Muito bem!');
+        triggerConfetti();
         videoWrapper.classList.remove('correct');
-        setTimeout(()=>{ cooldown=false; pickNewLetter(); },1400);
+
+        setTimeout(() => {
+          cooldown = false;
+          pickNewLetter(); // isso pode acionar o game over
+        }, 1400);
       }
     } else {
       videoWrapper.classList.remove('correct');
       const isMotion = LETTER_DATA[targetLetter]?.motion;
-      if (displayDetected !== '?') { videoWrapper.classList.add('wrong'); videoWrapper.classList.remove('motion'); }
-      else { videoWrapper.classList.remove('wrong'); if (isMotion) videoWrapper.classList.add('motion'); }
-      if (correctFrameCount>0) correctFrameCount=Math.max(0,correctFrameCount-2);
-      progressBar.style.width=Math.max(0,(correctFrameCount/REQUIRED_FRAMES)*100)+'%';
+      if (displayDetected !== '?') {
+        videoWrapper.classList.add('wrong');
+        videoWrapper.classList.remove('motion');
+      } else {
+        videoWrapper.classList.remove('wrong');
+        if (isMotion) videoWrapper.classList.add('motion');
+      }
+      if (correctFrameCount > 0) correctFrameCount = Math.max(0, correctFrameCount - 2);
+      progressBar.style.width = Math.max(0, (correctFrameCount / REQUIRED_FRAMES) * 100) + '%';
     }
   }
 
   /* ── Câmera ── */
   async function startCamera() {
     if (cameraActive) return;
-    messageDiv.textContent='⏳ Iniciando câmera…';
+    messageDiv.textContent = '⏳ Iniciando câmera…';
     try {
-      handsInstance = new Hands({ locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${f}` });
-      handsInstance.setOptions({ maxNumHands:1, modelComplexity:1, minDetectionConfidence:0.75, minTrackingConfidence:0.6 });
+      handsInstance = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${f}` });
+      handsInstance.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.75, minTrackingConfidence: 0.6 });
       handsInstance.onResults(onResults);
       const camera = new Camera(video, {
-        onFrame: async()=>{ await handsInstance.send({image:video}); },
-        width:640, height:480
+        onFrame: async () => { await handsInstance.send({ image: video }); },
+        width: 640, height: 480
       });
       await camera.start();
-      cameraActive=true; startBtn.textContent='⏹ Parar Câmera';
-      messageDiv.textContent='Faça o sinal da letra destacada!';
-      speak('Faça a letra '+targetLetter);
-    } catch(err) {
+      cameraActive = true;
+      startBtn.textContent = '⏹ Parar Câmera';
+      if (!gameComplete) {
+        messageDiv.textContent = 'Faça o sinal da letra destacada!';
+      }
+      speak('Faça a letra ' + targetLetter);
+    } catch (err) {
       console.error(err);
-      messageDiv.textContent='❌ Erro ao acessar a câmera. Verifique as permissões.';
+      messageDiv.textContent = '❌ Erro ao acessar a câmera. Verifique as permissões.';
     }
   }
 
   function stopCamera() {
-    if (handsInstance) { handsInstance.close(); handsInstance=null; }
-    cameraActive=false; correctFrameCount=0; cooldown=false;
-    videoWrapper.classList.remove('correct','wrong','motion');
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    detectedLetterDiv.textContent='?'; progressBar.style.width='0%'; clearHistory();
+    if (handsInstance) { handsInstance.close(); handsInstance = null; }
+    cameraActive = false;
+    correctFrameCount = 0;
+    cooldown = false;
+    videoWrapper.classList.remove('correct', 'wrong', 'motion');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    detectedLetterDiv.textContent = '?';
+    progressBar.style.width = '0%';
+    clearHistory();
   }
 
-  startBtn.addEventListener('click',()=>{ if(cameraActive){stopCamera();startBtn.textContent='📷 Iniciar Câmera';messageDiv.textContent='Câmera desligada.';} else startCamera(); });
-  resetBtn.addEventListener('click',()=>{ resetGame(); speak('Jogo reiniciado!'); });
-  video.addEventListener('loadedmetadata',()=>{ canvas.width=video.videoWidth; canvas.height=video.videoHeight; });
-  window.addEventListener('beforeunload',stopCamera);
+  startBtn.addEventListener('click', () => {
+    if (cameraActive) {
+      stopCamera();
+      startBtn.textContent = '📷 Iniciar Câmera';
+      messageDiv.textContent = 'Câmera desligada.';
+    } else {
+      startCamera();
+    }
+  });
 
+  resetBtn.addEventListener('click', resetGame);
+
+  video.addEventListener('loadedmetadata', () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  });
+
+  window.addEventListener('beforeunload', stopCamera);
+
+  /* ── Inicialização ── */
+  letterQueue = [...LETTERS].sort(() => Math.random() - 0.5);
+  score = 0;
+  updateScoreDisplay();
+  completedLetters.clear();
+  gameComplete = false;
+  resetBtn.style.display = 'none';  // botão escondido até o fim do jogo
   pickNewLetter();
 })();
 </script>
