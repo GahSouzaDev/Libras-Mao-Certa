@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Libras Mão Certa v2 ✋</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh; display: flex; justify-content: center; align-items: center;
+      overflow: hidden; user-select: none;
+    }
+    .container { width:100%; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; }
+    .layout { display:flex; flex-direction:column; align-items:center; gap:18px; width:100%; max-width:700px; height:100%; justify-content:center; }
+    @media (min-width:768px) {
+      .layout { flex-direction:row; max-width:1200px; width:95%; height:auto; gap:40px; align-items:center; }
+      .video-section { flex:2; min-width:0; }
+      .info-section { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; min-width:260px; }
+    }
+    .video-section { width:100%; max-width:600px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+    .video-wrapper {
+      position:relative; width:100%; aspect-ratio:4/3; border-radius:28px; overflow:hidden;
+      box-shadow:0 10px 30px rgba(0,0,0,.6), 0 0 0 3px rgba(255,215,0,.4);
+      background:#000; transition:box-shadow .25s ease;
+    }
+    .video-wrapper.correct { box-shadow:0 10px 40px rgba(0,255,100,.8), 0 0 0 4px #00ff88; }
+    .video-wrapper.wrong   { box-shadow:0 10px 40px rgba(255,50,50,.8),  0 0 0 4px #ff4444; }
+    .video-wrapper.motion  { box-shadow:0 10px 40px rgba(100,150,255,.8),0 0 0 4px #6699ff; }
+    video  { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+    canvas { position:absolute; inset:0; width:100%; height:100%; }
+    .confetti-canvas { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+    .title { font-size:2.2rem; font-weight:800; background:linear-gradient(to right,#f7971e,#ffd200); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; letter-spacing:1px; text-align:center; }
+    .target-area { display:flex; align-items:center; justify-content:center; gap:22px; flex-wrap:wrap; }
+    .target-letter {
+      font-size:7rem; font-weight:900; width:120px; height:120px; line-height:120px; text-align:center;
+      background:rgba(255,255,255,.08); border-radius:28px; color:#ffd200; text-shadow:0 0 30px #ffaa00;
+      box-shadow:0 0 25px rgba(255,170,0,.5),inset 0 0 15px rgba(255,255,255,.1); transition:transform .2s;
+    }
+    .target-letter.bounce { animation:bounce .4s ease; }
+    @keyframes bounce { 0%{transform:scale(1)} 40%{transform:scale(1.25)} 70%{transform:scale(.92)} 100%{transform:scale(1)} }
+    .detected-letter { font-size:2rem; color:rgba(255,255,255,.7); background:rgba(0,0,0,.4); padding:8px 20px; border-radius:50px; min-width:70px; text-align:center; font-weight:600; }
+    .score { font-size:1.4rem; color:#fff; font-weight:600; background:rgba(255,255,255,.1); padding:10px 28px; border-radius:50px; letter-spacing:1px; }
+    .progress-bar-wrap { width:100%; max-width:240px; background:rgba(255,255,255,.12); border-radius:50px; height:10px; overflow:hidden; }
+    .progress-bar { height:100%; width:0%; background:linear-gradient(90deg,#f7971e,#ffd200); border-radius:50px; transition:width .1s linear; }
+    .hint-box {
+      font-size:.85rem; color:rgba(255,255,255,.55); background:rgba(0,0,0,.3);
+      padding:7px 16px; border-radius:12px; text-align:center; min-height:28px;
+      max-width:260px; line-height:1.4;
+    }
+    .hint-box.motion-hint { color:#aac4ff; }
+    .message { color:#fff; font-weight:500; font-size:1.05rem; min-height:28px; text-align:center; padding:0 8px; }
+    .btn-row { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+    .btn {
+      background:linear-gradient(135deg,#f7971e,#ffd200); border:none; padding:13px 32px;
+      font-size:1.1rem; font-weight:700; border-radius:50px; color:#1a1a2e; cursor:pointer;
+      box-shadow:0 8px 25px rgba(255,210,0,.45); transition:all .25s ease; letter-spacing:.5px; text-transform:uppercase;
+    }
+    .btn:hover  { transform:scale(1.05); box-shadow:0 12px 35px rgba(255,210,0,.8); }
+    .btn:active { transform:scale(.95); }
+    .btn-reset { background:linear-gradient(135deg,#e74c3c,#c0392b); box-shadow:0 8px 25px rgba(231,76,60,.4); }
+    .btn-reset:hover { box-shadow:0 12px 35px rgba(231,76,60,.7); }
+    .letters-row { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:320px; }
+    .letter-pill { font-size:.72rem; font-weight:700; padding:3px 9px; border-radius:50px; background:rgba(255,255,255,.1); color:rgba(255,255,255,.65); letter-spacing:.5px; cursor:default; }
+    .letter-pill.has-motion { color:#aac4ff; }
+    @media (max-width:767px) {
+      .title { font-size:1.65rem; }
+      .target-letter { font-size:4rem; width:80px; height:80px; line-height:80px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="layout">
+    <div class="video-section">
+      <h1 class="title">🤟 Libras Mão Certa</h1>
+      <div class="video-wrapper" id="videoWrapper">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="handCanvas"></canvas>
+      </div>
+    </div>
+    <div class="info-section">
+      <div class="target-area">
+        <div class="target-letter" id="targetLetter">A</div>
+        <div class="detected-letter" id="detectedLetter">?</div>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="score">🏆 <span id="scoreDisplay">0</span> pontos</div>
+      <div class="hint-box" id="hintBox">—</div>
+      <div class="message" id="message">Clique em "Iniciar Câmera" e faça a letra!</div>
+      <div class="btn-row">
+        <button class="btn" id="startBtn">📷 Iniciar Câmera</button>
+        <button class="btn btn-reset" id="resetBtn">🔄 Reiniciar</button>
+      </div>
+      <div class="letters-row" id="lettersRow"></div>
+    </div>
+  </div>
+</div>
+<canvas class="confetti-canvas" id="confettiCanvas"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  /* ── Elementos ── */
+  const video          = document.getElementById('video');
+  const canvas         = document.getElementById('handCanvas');
+  const ctx            = canvas.getContext('2d');
+  const confettiCanvas = document.getElementById('confettiCanvas');
+  const confettiCtx    = confettiCanvas.getContext('2d');
+  const targetLetterDiv= document.getElementById('targetLetter');
+  const detectedLetterDiv=document.getElementById('detectedLetter');
+  const scoreDisplay   = document.getElementById('scoreDisplay');
+  const messageDiv     = document.getElementById('message');
+  const hintBox        = document.getElementById('hintBox');
+  const startBtn       = document.getElementById('startBtn');
+  const resetBtn       = document.getElementById('resetBtn');
+  const videoWrapper   = document.getElementById('videoWrapper');
+  const progressBar    = document.getElementById('progressBar');
+  const lettersRow     = document.getElementById('lettersRow');
+
+  /* ── Letras + dicas ── */
+  const LETTER_DATA = {
+    'A': { hint:'Punho fechado, polegar ao lado' },
+    'B': { hint:'4 dedos estendidos juntos, polegar dobrado para dentro' },
+    'C': { hint:'Mão curvada em forma de C' },
+    'D': { hint:'Indicador para cima, polegar toca o médio' },
+    'E': { hint:'Todos os dedos dobrados, polegar embaixo' },
+    'F': { hint:'Polegar + indicador se tocam, outros 3 estendidos' },
+    'G': { hint:'Indicador e polegar apontam para o lado (horizontal)' },
+    'H': { hint:'🔵 MOVIMENTO: Indicador+médio estendidos, gire o pulso para dentro', motion:true },
+    'I': { hint:'Só o mínimo estendido' },
+    'J': { hint:'🔵 MOVIMENTO: Mínimo faz um "J" no ar', motion:true },
+    'K': { hint:'Indicador + médio abertos em V, polegar no meio' },
+    'L': { hint:'Indicador para cima + polegar para o lado (L)' },
+    'M': { hint:'Punho, polegar sob os 3 primeiros dedos' },
+    'N': { hint:'Punho, polegar sob indicador + médio' },
+    'O': { hint:'Todos os dedos curvados formando um O' },
+    'P': { hint:'Mão apontada para baixo, indicador + polegar abertos' },
+    'Q': { hint:'Mão apontada para baixo, indicador + polegar formam O' },
+    'R': { hint:'Indicador + médio cruzados (entrelaçados)' },
+    'S': { hint:'Punho fechado, polegar cruzado sobre os dedos' },
+    'T': { hint:'Punho, polegar entre indicador e médio' },
+    'U': { hint:'Indicador + médio juntos e paralelos' },
+    'V': { hint:'Indicador + médio abertos em V' },
+    'W': { hint:'Indicador + médio + anelar estendidos' },
+    'X': { hint:'🔵 MOVIMENTO: Indicador dobrado faz gancho', motion:true },
+    'Y': { hint:'Polegar + mínimo estendidos' },
+    'Z': { hint:'🔵 MOVIMENTO: Indicador traça um Z no ar', motion:true },
+  };
+  const LETTERS = Object.keys(LETTER_DATA);
+
+  /* ── Pills ── */
+  LETTERS.forEach(l => {
+    const pill = document.createElement('span');
+    pill.className = 'letter-pill' + (LETTER_DATA[l].motion ? ' has-motion':'');
+    pill.textContent = l;
+    pill.id = 'pill-' + l;
+    lettersRow.appendChild(pill);
+  });
+
+  /* ── Estado ── */
+  let targetLetter = 'A';
+  let correctFrameCount = 0;
+  const REQUIRED_FRAMES = 20;
+  let score = 0;
+  let cameraActive = false;
+  let handsInstance = null;
+  let cooldown = false;
+
+  /* ── Histórico de movimento ── */
+  const HISTORY_LEN = 30;
+  let tipHistory = [];
+  let twistHistory = [];
+
+  /* ── Voz ── */
+  function speak(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'pt-BR'; u.rate = 0.9; u.pitch = 1.1; u.volume = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const ptVoice = voices.find(v => v.lang.startsWith('pt') && v.localService);
+    if (ptVoice) u.voice = ptVoice;
+    window.speechSynthesis.speak(u);
+  }
+  window.speechSynthesis.onvoiceschanged = () => {};
+
+  /* ── Confete ── */
+  let confettiParticles = [];
+  function resizeConfetti() { confettiCanvas.width=window.innerWidth; confettiCanvas.height=window.innerHeight; }
+  window.addEventListener('resize', resizeConfetti); resizeConfetti();
+  function spawnConfetti() {
+    confettiParticles = [];
+    for (let i=0;i<90;i++) confettiParticles.push({
+      x:Math.random()*confettiCanvas.width, y:Math.random()*confettiCanvas.height*.3-50,
+      size:Math.random()*9+4, speedY:Math.random()*4+2, speedX:(Math.random()-.5)*3.5,
+      color:`hsl(${Math.random()*360},100%,65%)`, rotation:Math.random()*360,
+      rotSpeed:(Math.random()-.5)*10, shape:Math.random()>.5?'rect':'circle'
+    });
+  }
+  function tickConfetti() {
+    confettiCtx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+    for (const p of confettiParticles) {
+      p.y+=p.speedY; p.x+=p.speedX; p.rotation+=p.rotSpeed;
+      confettiCtx.save(); confettiCtx.translate(p.x,p.y); confettiCtx.rotate(p.rotation*Math.PI/180);
+      confettiCtx.fillStyle=p.color; confettiCtx.globalAlpha=.9;
+      if (p.shape==='rect') confettiCtx.fillRect(-p.size/2,-p.size/4,p.size,p.size/2);
+      else { confettiCtx.beginPath(); confettiCtx.arc(0,0,p.size/2,0,Math.PI*2); confettiCtx.fill(); }
+      confettiCtx.restore();
+    }
+    confettiParticles = confettiParticles.filter(p=>p.y<confettiCanvas.height+50);
+    if (confettiParticles.length) requestAnimationFrame(tickConfetti);
+  }
+  function triggerConfetti() { spawnConfetti(); tickConfetti(); }
+
+  /* ── Geometria ── */
+  function dist3(a,b) { return Math.hypot(a.x-b.x,a.y-b.y,(a.z||0)-(b.z||0)); }
+  function dist2(a,b) { return Math.hypot(a.x-b.x,a.y-b.y); }
+  function angle3(a,b,c) {
+    const ab={x:a.x-b.x,y:a.y-b.y,z:(a.z||0)-(b.z||0)};
+    const cb={x:c.x-b.x,y:c.y-b.y,z:(c.z||0)-(b.z||0)};
+    const dot=ab.x*cb.x+ab.y*cb.y+ab.z*cb.z;
+    const ma=Math.sqrt(ab.x**2+ab.y**2+ab.z**2);
+    const mc=Math.sqrt(cb.x**2+cb.y**2+cb.z**2);
+    if (ma<1e-9||mc<1e-9) return 0;
+    return Math.acos(Math.max(-1,Math.min(1,dot/(ma*mc))))*180/Math.PI;
+  }
+  function palmRoll(lm) {
+    const wrist = lm[0], midMcp = lm[9];
+    const dx = midMcp.x - wrist.x, dy = midMcp.y - wrist.y, dz = (midMcp.z||0) - (wrist.z||0);
+    const norm = Math.sqrt(dx*dx+dy*dy+dz*dz)||1e-9;
+    return Math.atan2(dy/norm, dx/norm) * 180 / Math.PI;
+  }
+
+  /* ── Features ── */
+  function extractFeatures(lm) {
+    const palmSize = dist3(lm[0], lm[9]) || 0.001;
+    const N = (a,b) => dist3(a,b) / palmSize;
+    const N2= (a,b) => dist2(a,b) / palmSize;
+    return {
+      thumbExt: lm[4].y < lm[2].y,
+      idxExt:   lm[8].y < lm[6].y,
+      midExt:   lm[12].y < lm[10].y,
+      rinExt:   lm[16].y < lm[14].y,
+      pinExt:   lm[20].y < lm[18].y,
+      idxCurl:  angle3(lm[5], lm[6], lm[8]),
+      midCurl:  angle3(lm[9], lm[10], lm[12]),
+      rinCurl:  angle3(lm[13], lm[14], lm[16]),
+      pinCurl:  angle3(lm[17], lm[18], lm[20]),
+      tmbAngle: angle3(lm[1], lm[2], lm[4]),
+      d_ti:   N(lm[4], lm[8]),
+      d_tm:   N(lm[4], lm[12]),
+      d_im2:  N2(lm[8], lm[12]),
+      d_mr2:  N2(lm[12], lm[16]),
+      isRightHand: lm[17].x > lm[5].x,
+      thumbOver: (() => {
+        const r = lm[17].x > lm[5].x;
+        return r ? (lm[4].x > lm[17].x && lm[4].x < lm[5].x) : (lm[4].x < lm[17].x && lm[4].x > lm[5].x);
+      })(),
+      thumbOut: (() => {
+        const r = lm[17].x > lm[5].x;
+        return r ? lm[4].x < lm[3].x : lm[4].x > lm[3].x;
+      })(),
+      handDown: lm[0].y > lm[9].y,
+      handUp:   lm[0].y < lm[9].y,
+      palmRoll: palmRoll(lm)
+    };
+  }
+
+  /* ════════════════════════════════════════════
+     CLASSIFICADOR ESTÁTICO v2
+     Ranges combinados: dados originais UNION dados da professora
+     Ordenado por especificidade (mais restritivo primeiro)
+  ════════════════════════════════════════════ */
+  function classifyStatic(lm) {
+    if (!lm || lm.length < 21) return '?';
+    const f = extractFeatures(lm);
+
+    // ── S (polegar cruzado sobre dedos) ──
+    if (f.d_ti > 0.33 && f.d_ti < 0.64 &&
+        f.d_tm > 0.29 && f.d_tm < 0.60 &&
+        f.idxCurl > 3 && f.idxCurl < 62 &&
+        f.midCurl > -1 && f.midCurl < 54 &&
+        f.rinCurl > -3 && f.rinCurl < 51 &&
+        f.pinCurl > -7 && f.pinCurl < 48 &&
+        f.tmbAngle > 91 && f.tmbAngle < 146 &&
+        f.handDown && f.thumbExt && !f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'S';
+
+    // ── E (todos dobrados, tmbAngle mais baixo) ──
+    if (f.d_ti > -0.00 && f.d_ti < 0.56 &&
+        f.d_tm > -0.06 && f.d_tm < 0.41 &&
+        f.idxCurl > -4 && f.idxCurl < 53 &&
+        f.midCurl > -14 && f.midCurl < 45 &&
+        f.rinCurl > -24 && f.rinCurl < 35 &&
+        f.pinCurl > -13 && f.pinCurl < 44 &&
+        f.tmbAngle > 65 && f.tmbAngle < 140 &&
+        f.handDown && f.thumbExt && !f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'E';
+
+    // ── A (punho, polegar para fora — tmbAngle alto) ──
+    if (f.idxCurl > 1   && f.idxCurl < 76  &&
+        f.midCurl > -2  && f.midCurl < 84  &&
+        f.rinCurl > -10 && f.rinCurl < 76  &&
+        f.pinCurl > -9  && f.pinCurl < 98  &&
+        f.tmbAngle > 133 && f.tmbAngle < 188 &&
+        f.handDown && f.thumbExt &&
+        !f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'A';
+
+    // ── O (todos curvados, polegar estendido, sem thumbOut) ──
+    if (f.idxCurl > 22  && f.idxCurl < 186 &&
+        f.midCurl > 15  && f.midCurl < 172 &&
+        f.rinCurl > 0   && f.rinCurl < 159 &&
+        f.pinCurl > 12  && f.pinCurl < 151 &&
+        f.tmbAngle > 82 && f.tmbAngle < 191 &&
+        f.handDown && f.thumbExt &&
+        !f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'O';
+
+    // ── F (indicador dobrado, 3 estendidos, thumbOut) ──
+    if (f.idxCurl > 54  && f.idxCurl < 154 &&
+        f.midCurl > 150 && f.midCurl < 204 &&
+        f.rinCurl > 149 && f.rinCurl < 205 &&
+        f.pinCurl > 143 && f.pinCurl < 199 &&
+        f.tmbAngle > 136 && f.tmbAngle < 202 &&
+        f.handDown && f.thumbExt &&
+        !f.idxExt && f.midExt && f.rinExt && f.pinExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'F';
+
+    // ── T (polegar entre indicador/médio; médio+anelar+min estendidos; thumbOut) ──
+    if (f.idxCurl > 30  && f.idxCurl < 183 &&
+        f.midCurl > 150 && f.midCurl < 204 &&
+        f.rinCurl > 151 && f.rinCurl < 204 &&
+        f.pinCurl > 146 && f.pinCurl < 200 &&
+        f.tmbAngle > 109 && f.tmbAngle < 199 &&
+        f.handDown && f.thumbExt &&
+        !f.idxExt && f.midExt && f.rinExt && f.pinExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'T';
+
+    // ── B (4 dedos estendidos, sem thumbOut) ──
+    if (f.idxCurl > 143 && f.idxCurl < 196 &&
+        f.midCurl > 146 && f.midCurl < 198 &&
+        f.rinCurl > 148 && f.rinCurl < 201 &&
+        f.pinCurl > 152 && f.pinCurl < 205 &&
+        f.tmbAngle > 100 && f.tmbAngle < 175 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && f.midExt && f.rinExt && f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'B';
+
+    // ── W (idx+mid+rin estendidos, pin fechado, sem thumbOut) ──
+    if (f.idxCurl > 146 && f.idxCurl < 202 &&
+        f.midCurl > 147 && f.midCurl < 201 &&
+        f.rinCurl > 149 && f.rinCurl < 203 &&
+        f.pinCurl > 2   && f.pinCurl < 115 &&
+        f.tmbAngle > 78 && f.tmbAngle < 148 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && f.midExt && f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'W';
+
+    // ── V (idx+mid estendidos, afastados, sem thumbOut) ──
+    // d_im2 alto distingue do R e U
+    if (f.idxCurl > 148 && f.idxCurl < 202 &&
+        f.midCurl > 148 && f.midCurl < 202 &&
+        f.rinCurl > 8   && f.rinCurl < 73  &&
+        f.pinCurl > 7   && f.pinCurl < 105 &&
+        f.tmbAngle > 96 && f.tmbAngle < 157 &&
+        f.d_im2 > 0.40  && f.d_im2 < 0.95 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'V';
+
+    // ── R (idx+mid cruzados, muito próximos) ──
+    if (f.idxCurl > 143 && f.idxCurl < 199 &&
+        f.midCurl > 144 && f.midCurl < 204 &&
+        f.rinCurl > -1  && f.rinCurl < 83  &&
+        f.pinCurl > 17  && f.pinCurl < 120 &&
+        f.tmbAngle > 111 && f.tmbAngle < 169 &&
+        f.d_im2 > -0.01 && f.d_im2 < 0.38 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'R';
+
+    // ── U (idx+mid juntos, d_im2 pequeno) ──
+    if (f.idxCurl > 147 && f.idxCurl < 199 &&
+        f.midCurl > 150 && f.midCurl < 202 &&
+        f.rinCurl > -9  && f.rinCurl < 52  &&
+        f.pinCurl > 0   && f.pinCurl < 63  &&
+        f.tmbAngle > 99 && f.tmbAngle < 172 &&
+        f.d_im2 > 0.01  && f.d_im2 < 0.35 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'U';
+
+    // ── K (idx+mid estendidos + polegar no meio, rinCurl alto) ──
+    if (f.idxCurl > 141 && f.idxCurl < 201 &&
+        f.midCurl > 62  && f.midCurl < 203 &&
+        f.rinCurl > 9   && f.rinCurl < 146 &&
+        f.pinCurl > 18  && f.pinCurl < 159 &&
+        f.tmbAngle > 114 && f.tmbAngle < 188 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && !f.rinExt && !f.pinExt && !f.thumbOver)
+      return 'K';
+
+    // ── H (idx+mid horizontal, polegar estendido) ──
+    if (f.idxCurl > 146 && f.idxCurl < 203 &&
+        f.midCurl > 143 && f.midCurl < 202 &&
+        f.rinCurl > -5  && f.rinCurl < 96  &&
+        f.pinCurl > 6   && f.pinCurl < 109 &&
+        f.tmbAngle > 107 && f.tmbAngle < 198 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver)
+      return 'H';
+
+    // ── Y (polegar+mínimo, thumbOut) ──
+    if (f.idxCurl > 13  && f.idxCurl < 181 &&
+        f.midCurl > 26  && f.midCurl < 179 &&
+        f.rinCurl > 14  && f.rinCurl < 155 &&
+        f.pinCurl > 115 && f.pinCurl < 192 &&
+        f.tmbAngle > 148 && f.tmbAngle < 204 &&
+        f.handDown && f.thumbExt &&
+        !f.idxExt && !f.midExt && !f.rinExt && f.pinExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'Y';
+
+    // ── I (só mínimo, sem thumbOut) ──
+    if (f.idxCurl > -9  && f.idxCurl < 59  &&
+        f.midCurl > -8  && f.midCurl < 64  &&
+        f.rinCurl > -13 && f.rinCurl < 68  &&
+        f.pinCurl > 141 && f.pinCurl < 199 &&
+        f.tmbAngle > 70 && f.tmbAngle < 167 &&
+        f.handDown && f.thumbExt &&
+        !f.idxExt && !f.midExt && !f.rinExt && f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'I';
+
+    // ── L (indicador para cima, thumbOut, midCurl médio) ──
+    if (f.idxCurl > 141 && f.idxCurl < 202 &&
+        f.midCurl > 2   && f.midCurl < 86  &&
+        f.rinCurl > -3  && f.rinCurl < 108 &&
+        f.pinCurl > -15 && f.pinCurl < 109 &&
+        f.tmbAngle > 127 && f.tmbAngle < 193 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'L';
+
+    // ── G (indicador+polegar horizontal, midCurl baixo, thumbOut) ──
+    if (f.idxCurl > 143 && f.idxCurl < 199 &&
+        f.midCurl > -3  && f.midCurl < 67  &&
+        f.rinCurl > -16 && f.rinCurl < 59  &&
+        f.pinCurl > -19 && f.pinCurl < 60  &&
+        f.tmbAngle > 120 && f.tmbAngle < 186 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'G';
+
+    // ── D (indicador para cima, polegar toca médio, sem thumbOut) ──
+    if (f.idxCurl > 148 && f.idxCurl < 202 &&
+        f.midCurl > 17  && f.midCurl < 123 &&
+        f.rinCurl > 6   && f.rinCurl < 126 &&
+        f.pinCurl > 9   && f.pinCurl < 156 &&
+        f.tmbAngle > 94 && f.tmbAngle < 193 &&
+        f.handDown && f.thumbExt &&
+        f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'D';
+
+    // ── M (mão virada, todos fechados, thumbExt=false) ──
+    if (f.idxCurl > 147 && f.idxCurl < 200 &&
+        f.midCurl > 146 && f.midCurl < 202 &&
+        f.rinCurl > 146 && f.rinCurl < 205 &&
+        f.pinCurl > 30  && f.pinCurl < 196 &&
+        f.tmbAngle > 108 && f.tmbAngle < 181 &&
+        !f.handDown && !f.thumbExt &&
+        !f.idxExt && !f.midExt && !f.rinExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'M';
+
+    // ── N (mão virada, idx+mid fechados, rin+pin tendem a estar estendidos) ──
+    if (f.idxCurl > 146 && f.idxCurl < 203 &&
+        f.midCurl > 145 && f.midCurl < 200 &&
+        f.tmbAngle > 118 && f.tmbAngle < 179 &&
+        !f.handDown && !f.thumbExt &&
+        !f.idxExt && !f.midExt &&
+        !f.thumbOver && !f.thumbOut)
+      return 'N';
+
+    // ── C (curvado em C, thumbOut) ──
+    if (f.idxCurl > 86  && f.idxCurl < 170 &&
+        f.midCurl > 67  && f.midCurl < 158 &&
+        f.rinCurl > 64  && f.rinCurl < 157 &&
+        f.pinCurl > 82  && f.pinCurl < 179 &&
+        f.tmbAngle > 123 && f.tmbAngle < 195 &&
+        f.handDown && !f.thumbOver && f.thumbOut)
+      return 'C';
+
+    // ── P (mão para baixo/frente, idx estendido, rin+pin fechados, thumbOut) ──
+    if (f.idxCurl > 143 && f.idxCurl < 201 &&
+        f.midCurl > 146 && f.midCurl < 201 &&
+        f.rinCurl > 11  && f.rinCurl < 118 &&
+        f.pinCurl > 4   && f.pinCurl < 133 &&
+        f.tmbAngle > 126 && f.tmbAngle < 196 &&
+        !f.thumbExt && f.idxExt &&
+        !f.midExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'P';
+
+    // ── Q (mão para baixo, idx fechado, mid+rin+pin estendidos, thumbOut) ──
+    if (f.idxCurl > 149 && f.idxCurl < 204 &&
+        f.tmbAngle > 113 && f.tmbAngle < 201 &&
+        !f.thumbExt && !f.idxExt &&
+        !f.thumbOver && f.thumbOut)
+      return 'Q';
+
+    return '?';
+  }
+
+  /* ════════════════════════════════════════════
+     DETECÇÃO DE MOVIMENTOS
+  ════════════════════════════════════════════ */
+  function pushHistory(pt) {
+    tipHistory.push({x:pt.x, y:pt.y});
+    if (tipHistory.length > HISTORY_LEN) tipHistory.shift();
+  }
+  function pushTwist(angle) {
+    twistHistory.push(angle);
+    if (twistHistory.length > HISTORY_LEN) twistHistory.shift();
+  }
+  function clearHistory() { tipHistory = []; twistHistory = []; }
+
+  function detectJ() {
+    if (tipHistory.length < 15) return false;
+    const pts = tipHistory.slice(-20);
+    const first = pts[0], last = pts[pts.length-1];
+    const totalY = last.y - first.y;
+    const totalX = last.x - first.x;
+    return totalY > 0.08 && Math.abs(totalX) > 0.04;
+  }
+
+  function detectX() {
+    if (tipHistory.length < 12) return false;
+    const pts = tipHistory.slice(-18);
+    let minY = pts[0].y, maxY = pts[0].y, minIdx = 0;
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i].y > maxY) { maxY = pts[i].y; minIdx = i; }
+      if (pts[i].y < minY) minY = pts[i].y;
+    }
+    const range = maxY - minY;
+    return range > 0.06 && minIdx > 3 && minIdx < pts.length - 2;
+  }
+
+  function detectZ() {
+    if (tipHistory.length < 18) return false;
+    const pts = tipHistory.slice(-25);
+    const n = pts.length;
+    const s1 = pts.slice(0, Math.floor(n/3));
+    const s2 = pts.slice(Math.floor(n/3), Math.floor(2*n/3));
+    const s3 = pts.slice(Math.floor(2*n/3));
+    const dy1 = s1[s1.length-1].y - s1[0].y;
+    const dx2 = s2[s2.length-1].x - s2[0].x;
+    const dy3 = s3[s3.length-1].y - s3[0].y;
+    return dy1 > 0.04 && Math.abs(dx2) > 0.05 && dy3 > 0.03;
+  }
+
+  function detectHTwist() {
+    if (twistHistory.length < 15) return false;
+    const recent = twistHistory.slice(-20);
+    const max = Math.max(...recent);
+    const min = Math.min(...recent);
+    return (max - min) > 25;
+  }
+
+  /* ════════════════════════════════════════════
+     CLASSIFICADOR PRINCIPAL
+  ════════════════════════════════════════════ */
+  function classifyHand(lm) {
+    const staticResult = classifyStatic(lm);
+    const target = targetLetter;
+
+    if (target === 'J') { pushHistory(lm[20]); twistHistory=[]; }
+    else if (target === 'X' || target === 'Z') { pushHistory(lm[8]); twistHistory=[]; }
+    else if (target === 'H') { pushTwist(palmRoll(lm)); tipHistory=[]; }
+    else { clearHistory(); }
+
+    if (target === 'J' && (staticResult === 'I' || staticResult === 'J') && detectJ()) return 'J';
+    if (target === 'X' && detectX()) return 'X';
+    if (target === 'Z' && (staticResult === 'D' || staticResult === 'Z') && detectZ()) return 'Z';
+    if (target === 'H' && staticResult === 'H' && detectHTwist()) return 'H';
+
+    return staticResult;
+  }
+
+  /* ── Desenho da mão ── */
+  function mx(p) { return (1-p.x)*canvas.width; }
+  function my(p) { return p.y*canvas.height; }
+  function drawHand(lm) {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if (!lm) return;
+    const CONN=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+    ctx.strokeStyle='#00ffcc'; ctx.lineWidth=2.5; ctx.shadowColor='#00ffcc'; ctx.shadowBlur=9;
+    for (const [i,j] of CONN) {
+      ctx.beginPath(); ctx.moveTo(mx(lm[i]),my(lm[i])); ctx.lineTo(mx(lm[j]),my(lm[j])); ctx.stroke();
+    }
+    for (const p of lm) {
+      ctx.beginPath(); ctx.arc(mx(p),my(p),5,0,Math.PI*2);
+      ctx.fillStyle='#ffd200'; ctx.shadowColor='#ffaa00'; ctx.shadowBlur=10; ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.shadowColor='transparent';
+
+    if (tipHistory.length > 2) {
+      ctx.beginPath();
+      ctx.moveTo((1-tipHistory[0].x)*canvas.width, tipHistory[0].y*canvas.height);
+      for (let i=1;i<tipHistory.length;i++) ctx.lineTo((1-tipHistory[i].x)*canvas.width, tipHistory[i].y*canvas.height);
+      ctx.strokeStyle='rgba(100,150,255,0.7)'; ctx.lineWidth=3; ctx.stroke();
+    }
+  }
+
+  /* ── Jogo ── */
+  function pickNewLetter() {
+    let nl;
+    do { nl = LETTERS[Math.floor(Math.random()*LETTERS.length)]; }
+    while (nl === targetLetter && LETTERS.length > 1);
+    targetLetter = nl;
+    targetLetterDiv.textContent = targetLetter;
+    targetLetterDiv.classList.remove('bounce');
+    void targetLetterDiv.offsetWidth;
+    targetLetterDiv.classList.add('bounce');
+    correctFrameCount = 0; progressBar.style.width = '0%'; clearHistory();
+    const data = LETTER_DATA[targetLetter];
+    hintBox.textContent = data.hint;
+    hintBox.className = 'hint-box' + (data.motion ? ' motion-hint' : '');
+    document.querySelectorAll('.letter-pill').forEach(p => p.style.background='');
+    const ap = document.getElementById('pill-'+targetLetter);
+    if (ap) ap.style.background='rgba(255,210,0,0.4)';
+    videoWrapper.classList.remove('motion');
+    if (data.motion) videoWrapper.classList.add('motion');
+    setTimeout(() => speak('Faça a letra ' + targetLetter), 200);
+  }
+
+  function resetGame() {
+    score=0; scoreDisplay.textContent='0';
+    correctFrameCount=0; progressBar.style.width='0%';
+    videoWrapper.classList.remove('correct','wrong','motion');
+    detectedLetterDiv.textContent='?'; cooldown=false;
+    clearHistory(); pickNewLetter();
+    messageDiv.textContent = cameraActive ? 'Faça o sinal da letra destacada!' : 'Clique em "Iniciar Câmera" e faça a letra!';
+  }
+
+  function onResults(results) {
+    if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
+      drawHand(null);
+      detectedLetterDiv.textContent='?';
+      videoWrapper.classList.remove('correct','wrong');
+      if (LETTER_DATA[targetLetter]?.motion) videoWrapper.classList.add('motion');
+      correctFrameCount=0; progressBar.style.width='0%';
+      return;
+    }
+    const lm = results.multiHandLandmarks[0];
+    drawHand(lm);
+    if (cooldown) return;
+
+    const detected = classifyHand(lm);
+    detectedLetterDiv.textContent = detected;
+
+    if (detected === targetLetter) {
+      videoWrapper.classList.add('correct'); videoWrapper.classList.remove('wrong','motion');
+      correctFrameCount++;
+      progressBar.style.width = Math.min(100,(correctFrameCount/REQUIRED_FRAMES)*100)+'%';
+      if (correctFrameCount >= REQUIRED_FRAMES) {
+        cooldown=true; score++; scoreDisplay.textContent=score;
+        messageDiv.textContent=`✅ Muito bem! Letra "${targetLetter}" correta!`;
+        speak('Muito bem!'); triggerConfetti();
+        videoWrapper.classList.remove('correct');
+        setTimeout(()=>{ cooldown=false; pickNewLetter(); },1400);
+      }
+    } else {
+      videoWrapper.classList.remove('correct');
+      const isMotion = LETTER_DATA[targetLetter]?.motion;
+      if (detected !== '?') { videoWrapper.classList.add('wrong'); videoWrapper.classList.remove('motion'); }
+      else { videoWrapper.classList.remove('wrong'); if (isMotion) videoWrapper.classList.add('motion'); }
+      if (correctFrameCount>0) correctFrameCount=Math.max(0,correctFrameCount-2);
+      progressBar.style.width=Math.max(0,(correctFrameCount/REQUIRED_FRAMES)*100)+'%';
+    }
+  }
+
+  /* ── Câmera ── */
+  async function startCamera() {
+    if (cameraActive) return;
+    messageDiv.textContent='⏳ Iniciando câmera…';
+    try {
+      handsInstance = new Hands({ locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${f}` });
+      handsInstance.setOptions({ maxNumHands:1, modelComplexity:1, minDetectionConfidence:0.75, minTrackingConfidence:0.6 });
+      handsInstance.onResults(onResults);
+      const camera = new Camera(video, {
+        onFrame: async()=>{ await handsInstance.send({image:video}); },
+        width:640, height:480
+      });
+      await camera.start();
+      cameraActive=true; startBtn.textContent='⏹ Parar Câmera';
+      messageDiv.textContent='Faça o sinal da letra destacada!';
+      speak('Faça a letra '+targetLetter);
+    } catch(err) {
+      console.error(err);
+      messageDiv.textContent='❌ Erro ao acessar a câmera. Verifique as permissões.';
+    }
+  }
+
+  function stopCamera() {
+    if (handsInstance) { handsInstance.close(); handsInstance=null; }
+    cameraActive=false; correctFrameCount=0; cooldown=false;
+    videoWrapper.classList.remove('correct','wrong','motion');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    detectedLetterDiv.textContent='?'; progressBar.style.width='0%'; clearHistory();
+  }
+
+  startBtn.addEventListener('click',()=>{ if(cameraActive){stopCamera();startBtn.textContent='📷 Iniciar Câmera';messageDiv.textContent='Câmera desligada.';} else startCamera(); });
+  resetBtn.addEventListener('click',()=>{ resetGame(); speak('Jogo reiniciado!'); });
+  video.addEventListener('loadedmetadata',()=>{ canvas.width=video.videoWidth; canvas.height=video.videoHeight; });
+  window.addEventListener('beforeunload',stopCamera);
+
+  pickNewLetter();
+})();
+</script>
+</body>
+</html>
