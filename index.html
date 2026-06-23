@@ -120,7 +120,7 @@
   const progressBar    = document.getElementById('progressBar');
   const lettersRow     = document.getElementById('lettersRow');
 
-  /* ── Letras + dicas ── */
+  /* ── Letras + dicas (K agora é movimento) ── */
   const LETTER_DATA = {
     'A': { hint:'Punho fechado, polegar ao lado' },
     'B': { hint:'4 dedos estendidos juntos, polegar dobrado para dentro' },
@@ -132,7 +132,7 @@
     'H': { hint:'🔵 MOVIMENTO: Indicador+médio estendidos, gire o pulso para dentro', motion:true },
     'I': { hint:'Só o mínimo estendido' },
     'J': { hint:'🔵 MOVIMENTO: Mínimo faz um "J" no ar', motion:true },
-    'K': { hint:'Indicador + médio abertos em V, polegar no meio' },
+    'K': { hint:'Indicador + médio abertos em V, polegar no meio (movimento)', motion:true },
     'L': { hint:'Indicador para cima + polegar para o lado (L)' },
     'M': { hint:'Punho, polegar sob os 3 primeiros dedos' },
     'N': { hint:'Punho, polegar sob indicador + médio' },
@@ -271,7 +271,8 @@
   }
 
   /* ════════════════════════════════════════════
-     CLASSIFICADOR ESTÁTICO v2
+     CLASSIFICADOR ESTÁTICO
+     (R agora com d_im2 < 0.17 para não capturar U)
   ════════════════════════════════════════════ */
   function classifyStatic(lm) {
     if (!lm || lm.length < 21) return '?';
@@ -379,25 +380,25 @@
         !f.thumbOver && !f.thumbOut)
       return 'V';
 
-    // ── R ──
+    // ── R (com restrição extra: d_im2 < 0.17, típico de dedos cruzados) ──
     if (f.idxCurl > 143 && f.idxCurl < 199 &&
         f.midCurl > 144 && f.midCurl < 204 &&
         f.rinCurl > -1  && f.rinCurl < 83  &&
         f.pinCurl > 17  && f.pinCurl < 120 &&
         f.tmbAngle > 111 && f.tmbAngle < 169 &&
-        f.d_im2 > -0.01 && f.d_im2 < 0.38 &&
+        f.d_im2 > -0.01 && f.d_im2 < 0.17 &&   // ← filtro decisivo contra o U
         f.handDown && f.thumbExt &&
         f.idxExt && f.midExt && !f.rinExt && !f.pinExt &&
         !f.thumbOver && !f.thumbOut)
       return 'R';
 
-    // ── U ──
-    if (f.idxCurl > 147 && f.idxCurl < 199 &&
-        f.midCurl > 150 && f.midCurl < 202 &&
-        f.rinCurl > -9  && f.rinCurl < 52  &&
-        f.pinCurl > 0   && f.pinCurl < 63  &&
-        f.tmbAngle > 99 && f.tmbAngle < 172 &&
-        f.d_im2 > 0.01  && f.d_im2 < 0.35 &&
+    // ── U (mantido inalterado) ──
+    if (f.idxCurl > 171 && f.idxCurl < 180 &&
+        f.midCurl > 174 && f.midCurl < 181 &&
+        f.rinCurl > 15  && f.rinCurl < 55  &&
+        f.pinCurl > 20  && f.pinCurl < 70  &&
+        f.tmbAngle > 130 && f.tmbAngle < 143 &&
+        f.d_im2 > 0.17  && f.d_im2 < 0.40 &&
         f.handDown && f.thumbExt &&
         f.idxExt && f.midExt && !f.rinExt && !f.pinExt &&
         !f.thumbOver && !f.thumbOut)
@@ -457,15 +458,15 @@
         !f.thumbOver && f.thumbOut)
       return 'L';
 
-    // ── G (com dados de treino) ──
-    if (f.idxCurl > 164 && f.idxCurl < 175 &&
-        f.midCurl > 15  && f.midCurl < 115 &&
-        f.rinCurl > 10  && f.rinCurl < 115 &&
-        f.pinCurl > 5   && f.pinCurl < 135 &&
-        f.tmbAngle > 138 && f.tmbAngle < 170 &&
-        f.d_ti > 0.75 &&
-        f.d_im2 > 1.2 &&
-        f.palmRoll < -60 &&
+    // ── G ──
+    if (f.idxCurl > 165 && f.idxCurl < 185 &&
+        f.midCurl > 10  && f.midCurl < 125 &&
+        f.rinCurl > 5   && f.rinCurl < 125 &&
+        f.pinCurl > 2   && f.pinCurl < 150 &&
+        f.tmbAngle > 115 && f.tmbAngle < 185 &&
+        f.d_ti > 0.45 &&
+        f.d_im2 > 1.15 &&
+        f.palmRoll < -50 &&
         f.handDown && f.thumbExt &&
         f.idxExt && !f.midExt && !f.rinExt && !f.pinExt &&
         !f.thumbOver)
@@ -563,10 +564,7 @@
   }
 
   function detectX() {
-    // Precisa de pelo menos 10 frames de histórico de curvatura
     if (idxCurlHistory.length < 10) return false;
-
-    // Verifica se houve gancho (idxCurl < 130) após dedo reto (>150)
     let hasHook = false;
     let hadStraightBefore = false;
     for (let i = 0; i < idxCurlHistory.length; i++) {
@@ -574,8 +572,6 @@
       if (i < idxCurlHistory.length - 3 && idxCurlHistory[i] > 150) hadStraightBefore = true;
     }
     if (!hasHook || !hadStraightBefore) return false;
-
-    // Movimento vertical da ponta do indicador como confirmação
     if (tipHistory.length < 10) return false;
     const pts = tipHistory.slice(-15);
     let minY = pts[0].y, maxY = pts[0].y;
@@ -733,8 +729,8 @@
     if (isMatch) {
       videoWrapper.classList.add('correct'); videoWrapper.classList.remove('wrong','motion');
 
-      // Z, J e X preenchem a barra instantaneamente
-      if (targetLetter === 'Z' || targetLetter === 'J' || targetLetter === 'X') {
+      // Preenchimento instantâneo para letras de movimento (K incluso)
+      if (targetLetter === 'Z' || targetLetter === 'J' || targetLetter === 'X' || targetLetter === 'H' || targetLetter === 'K') {
         correctFrameCount = REQUIRED_FRAMES;
       } else {
         correctFrameCount++;
